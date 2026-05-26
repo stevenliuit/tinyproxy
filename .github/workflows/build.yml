@@ -60,7 +60,6 @@ jobs:
             glib2.0-dev \
             libev-dev \
             autoconf-archive \
-            libglib2.0-dev \
             help2man
 
       - name: 安装依赖 (macOS)
@@ -74,11 +73,12 @@ jobs:
         run: |
           choco install -y make mingw msys2 coreutils unzip
 
-      - name: 生成构建脚本 (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: 生成构建脚本
         run: |
           chmod +x autogen.sh
           ./autogen.sh
+        shell: bash
+        if: matrix.platform != 'windows'
 
       - name: 生成构建脚本 (Windows)
         if: matrix.platform == 'windows'
@@ -88,13 +88,11 @@ jobs:
           chmod +x autogen.sh
           bash autogen.sh
 
-      - name: 配置 (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: 配置
         run: |
-          if [ ! -f configure ]; then
-            chmod +x autogen.sh && ./autogen.sh
-          fi
           ./configure --prefix=/usr/local
+        shell: bash
+        if: matrix.platform != 'windows'
 
       - name: 配置 (Windows)
         if: matrix.platform == 'windows'
@@ -102,61 +100,25 @@ jobs:
         run: |
           export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
           export PKG_CONFIG_PATH="/c/msys64/usr/lib/pkgconfig:/c/mingw64/lib/pkgconfig"
-          if [ ! -f configure ]; then
-            chmod +x autogen.sh && bash autogen.sh
-          fi
           ./configure --prefix=/c/tinyproxy
 
-      - name: 编译
-        run: |
-          make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-
-      - name: 安装并测试
+      - name: 编译并打包 (Linux/macOS)
         if: matrix.platform != 'windows'
         run: |
-          make install
-          ls -la src/tinyproxy
-          ./src/tinyproxy --version 2>/dev/null || echo "tinyproxy binary exists at src/tinyproxy"
+          make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) install DESTDIR=$(pwd)/tinyproxy-install
+          tar -czf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C tinyproxy-install .
+          ls -la tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
 
-      - name: 安装并测试 (Windows)
+      - name: 编译并打包 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
         run: |
           export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
-          make install
-          if [ -f ./src/tinyproxy.exe ]; then
-            ./src/tinyproxy.exe --version 2>/dev/null || echo "tinyproxy built"
-          elif [ -f /c/tinyproxy/bin/tinyproxy.exe ]; then
-            /c/tinyproxy/bin/tinyproxy.exe --version 2>/dev/null || echo "tinyproxy built"
-          fi
-
-      - name: 打包 (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          mkdir -p tinyproxy-install
-          make DESTDIR=$(pwd)/tinyproxy-install install
-          ls -la tinyproxy-install/
-          tar -czf tinyproxy-${{ matrix.arch }}-linux.tar.gz -C tinyproxy-install . && ls -la tinyproxy-${{ matrix.arch }}-linux.tar.gz
-
-      - name: 打包 (macOS)
-        if: matrix.platform == 'macos'
-        run: |
-          mkdir -p tinyproxy-install
-          make DESTDIR=$(pwd)/tinyproxy-install install
-          ls -la tinyproxy-install/
-          tar -czf tinyproxy-${{ matrix.arch }}-macos.tar.gz -C tinyproxy-install . && ls -la tinyproxy-${{ matrix.arch }}-macos.tar.gz
-
-      - name: 打包 (Windows)
-        if: matrix.platform == 'windows'
-        shell: bash
-        run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
-          mkdir -p tinyproxy-install
-          make DESTDIR="C:/tinyproxy-install" install 2>/dev/null || make install
+          make install DESTDIR="C:/tinyproxy-install"
           if [ -d /c/tinyproxy ]; then
-            cd /c/tinyproxy && zip -r /c/tinyproxy-install/tinyproxy-${{ matrix.arch }}-windows.zip . && cd /
+            cd /c/tinyproxy && zip -r /c/tinyproxy-install/tinyproxy-windows-${{ matrix.arch }}.zip . && cd /
           fi
-          cd tinyproxy-install && zip -r ../tinyproxy-${{ matrix.arch }}-windows.zip . 2>/dev/null || echo "Package created"
+          cd tinyproxy-install 2>/dev/null && zip -r ../tinyproxy-windows-${{ matrix.arch }}.zip . 2>/dev/null || ls -la
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4

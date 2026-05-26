@@ -4,17 +4,48 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本标签'
+        description: '版本标签 (留空则使用上游最新tag)'
         required: false
-        default: '1.11.0'
+        default: ''
   push:
-    branches: [master, main]
+    tags:
+      - '**'
   pull_request:
     branches: [master, main]
 
+env:
+  UPSTREAM_REPO: tinyproxy/tinyproxy
+
 jobs:
+  prepare:
+    name: 准备构建信息
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.info.outputs.version }}
+      tag_name: ${{ steps.info.outputs.tag_name }}
+
+    steps:
+      - name: 获取上游标签
+        id: info
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            TAG_NAME="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(curl -s https://api.github.com/repos/${{ env.UPSTREAM_REPO }}/releases/latest | grep tag_name | cut -d'"' -f4)
+            TAG_NAME="$VERSION"
+            if [ -z "$VERSION" ]; then
+              VERSION="1.11.0"
+              TAG_NAME="1.11.0"
+            fi
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "构建版本: $VERSION"
+
   build:
     name: 构建 (${{ matrix.platform }} ${{ matrix.arch }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,9 +60,6 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: armv7l
-          - os: windows-latest
-            platform: windows
-            arch: x86_64
           - os: macos-14
             platform: macos
             arch: arm64
@@ -43,8 +71,8 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
-          repository: tinyproxy/tinyproxy
-          ref: master
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ needs.prepare.outputs.tag_name }}
           fetch-depth: 1
 
       - name: 安装依赖 (Linux)
@@ -67,29 +95,16 @@ jobs:
         run: |
           brew install autoconf automake libtool pkg-config glib autoconf-archive help2man
 
-      - name: 安装依赖 (Windows)
-        if: matrix.platform == 'windows'
-        shell: powershell
-        run: |
-          choco install -y make visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK --passive"
-
       - name: 生成构建脚本
         run: |
           chmod +x autogen.sh
           ./autogen.sh
 
-      - name: 配置 (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 && bash -c "./configure --prefix=/c/tinyproxy"
-
-      - name: 配置 (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: 配置
         run: |
           ./configure --prefix=/usr/local
 
-      - name: 编译并打包 (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: 编译并打包
         run: |
           make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) install DESTDIR=$(pwd)/tinyproxy-install
           mkdir -p tinyproxy-bin
@@ -98,24 +113,57 @@ jobs:
           find tinyproxy-install -name tinyproxy -type f -executable -exec cp {} tinyproxy-bin/ \; 2>/dev/null
           cp -rv tinyproxy-install/usr/local/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || \
           cp -rv tinyproxy-install/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true
-          tar -czvf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C tinyproxy-bin .
-
-      - name: 编译并打包 (Windows)
-        if: matrix.platform == 'windows'
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
-          bash -c "make install DESTDIR=/c/tinyproxy-install"
-          mkdir tinyproxy-bin
-          bash -c "cp -v /c/tinyproxy-install/bin/tinyproxy.exe tinyproxy-bin/ 2>/dev/null || cp -v /c/tinyproxy-install/tinyproxy/bin/tinyproxy.exe tinyproxy-bin/ 2>/dev/null || find /c/tinyproxy-install -name tinyproxy.exe -exec cp {} tinyproxy-bin/ \;"
-          bash -c "cp -r /c/tinyproxy-install/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || cp -r /c/tinyproxy-install/tinyproxy/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true"
-          powershell -Command "Compress-Archive -Path 'tinyproxy-bin' -DestinationPath 'tinyproxy-windows-x86_64.zip'"
+          tar -czvf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}.tar.gz -C tinyproxy-bin .
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}
-          path: |
-            tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
-            tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.zip
+          name: tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}
+          path: tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}.tar.gz
           retention-days: 7
+
+  create-release:
+    name: 创建 Release
+    needs: [prepare, build]
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag_name }}
+          name: Tinyproxy ${{ needs.prepare.outputs.version }}
+          body: |
+            Tinyproxy ${{ needs.prepare.outputs.version }} 多平台构建
+
+            ### 下载链接
+
+            | 平台 | 架构 | 文件 |
+            |------|------|------|
+            | Linux | x86_64 | tinyproxy-linux-x86_64-${{ needs.prepare.outputs.version }}.tar.gz |
+            | Linux | ARM64 | tinyproxy-linux-arm64-${{ needs.prepare.outputs.version }}.tar.gz |
+            | Linux | ARMv7l | tinyproxy-linux-armv7l-${{ needs.prepare.outputs.version }}.tar.gz |
+            | macOS | ARM64 | tinyproxy-macos-arm64-${{ needs.prepare.outputs.version }}.tar.gz |
+            | macOS | x86_64 | tinyproxy-macos-x86_64-${{ needs.prepare.outputs.version }}.tar.gz |
+
+            ### 使用说明
+
+            ```bash
+            tar -xzf tinyproxy-linux-x86_64-${{ needs.prepare.outputs.version }}.tar.gz
+            cd tinyproxy-bin
+            ./tinyproxy
+            ```
+
+            ### 配置
+
+            配置文件位于 `etc/tinyproxy/tinyproxy.conf`
+          draft: false
+          files: artifacts/**/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

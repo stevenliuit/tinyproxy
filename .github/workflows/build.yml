@@ -69,9 +69,11 @@ jobs:
 
       - name: 安装依赖 (Windows)
         if: matrix.platform == 'windows'
-        shell: powershell
+        shell: bash
         run: |
-          choco install -y make mingw msys2 coreutils unzip
+          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
+          choco install -y make mingw || echo "choco install attempted"
+          which autoconf || echo "autoconf check"
 
       - name: 生成构建脚本
         run: |

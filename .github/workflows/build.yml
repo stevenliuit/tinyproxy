@@ -72,34 +72,15 @@ jobs:
         shell: powershell
         run: |
           choco install -y make visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK --passive"
-          choco install -y msys2 --params "/InstallDir:C:\msys64"
 
-      - name: 生成构建脚本 (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: 生成构建脚本
         run: |
           chmod +x autogen.sh
           ./autogen.sh
 
-      - name: 生成构建脚本 (Windows)
-        if: matrix.platform == 'windows'
-        shell: bash
-        run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
-          chmod +x autogen.sh
-          bash autogen.sh
-
-      - name: 配置 (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: 配置
         run: |
           ./configure --prefix=/usr/local
-
-      - name: 配置 (Windows)
-        if: matrix.platform == 'windows'
-        shell: bash
-        run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
-          export PKG_CONFIG_PATH="/c/msys64/usr/lib/pkgconfig:/c/mingw64/lib/pkgconfig"
-          ./configure --prefix=/c/tinyproxy
 
       - name: 编译并打包 (Linux/macOS)
         if: matrix.platform != 'windows'
@@ -111,9 +92,8 @@ jobs:
         if: matrix.platform == 'windows'
         shell: bash
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
-          make install DESTDIR="C:/tinyproxy-install"
-          cd tinyproxy-install && zip -r ../tinyproxy-windows-x86_64.zip .
+          make install DESTDIR=/c/tinyproxy-install
+          cd /c/tinyproxy-install && zip -r ../tinyproxy-windows-x86_64.zip .
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4

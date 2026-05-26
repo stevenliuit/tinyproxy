@@ -73,39 +73,45 @@ jobs:
         run: |
           choco install -y make visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK --passive"
           choco install -y msys2 --params "/InstallDir:C:\msys64"
-          if (Test-Path "C:\msys64\usr\bin\bash.exe") {
-            Write-Host "MSYS2 bash found"
-          }
+
+      - name: 生成构建脚本 (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: |
+          chmod +x autogen.sh
+          ./autogen.sh
 
       - name: 生成构建脚本 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
-        variables:
-          MSYS: winsymlinks
-          MSYS_ROOT: C:\msys64
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:/c/Program Files/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.36.32532/bin/HostX64/x64:$PATH"
-          export PKG_CONFIG_PATH="/c/msys64/usr/lib/pkgconfig:/c/mingw64/lib/pkgconfig"
+          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
           chmod +x autogen.sh
           bash autogen.sh
+
+      - name: 配置 (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: |
+          ./configure --prefix=/usr/local
 
       - name: 配置 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
-        variables:
-          MSYS: winsymlinks
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:/c/Program Files/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.36.32532/bin/HostX64/x64:$PATH"
+          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
           export PKG_CONFIG_PATH="/c/msys64/usr/lib/pkgconfig:/c/mingw64/lib/pkgconfig"
           ./configure --prefix=/c/tinyproxy
+
+      - name: 编译并打包 (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: |
+          make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) install DESTDIR=$(pwd)/tinyproxy-install
+          tar -czf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C tinyproxy-install .
 
       - name: 编译并打包 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
-        variables:
-          MSYS: winsymlinks
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:/c/Program Files/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.36.32532/bin/HostX64/x64:$PATH"
+          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
           make install DESTDIR="C:/tinyproxy-install"
           cd tinyproxy-install && zip -r ../tinyproxy-windows-x86_64.zip .
 

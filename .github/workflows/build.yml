@@ -79,6 +79,14 @@ jobs:
           ./autogen.sh
 
       - name: 配置
+        shell: cmd
+        if: matrix.platform == 'windows'
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+          bash -c "./configure --prefix=/c/tinyproxy"
+
+      - name: 配置
+        if: matrix.platform != 'windows'
         run: |
           ./configure --prefix=/usr/local
 

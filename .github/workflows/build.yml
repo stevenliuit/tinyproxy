@@ -18,19 +18,22 @@ env:
 
 jobs:
   prepare:
-    name: 准备构建信息
+    name: 准备版本信息
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.info.outputs.version }}
       tag_name: ${{ steps.info.outputs.tag_name }}
 
     steps:
-      - name: 获取上游标签
+      - name: 获取版本标签
         id: info
         run: |
           if [ "${{ github.event.inputs.version }}" != "" ]; then
             VERSION="${{ github.event.inputs.version }}"
             TAG_NAME="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref }}" != "" ] && [ "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            TAG_NAME="$VERSION"
           else
             VERSION=$(curl -s https://api.github.com/repos/${{ env.UPSTREAM_REPO }}/releases/latest | grep tag_name | cut -d'"' -f4)
             TAG_NAME="$VERSION"
@@ -129,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 下载所有构建产物
+      - name: 下载构建产物
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -142,7 +145,7 @@ jobs:
           body: |
             Tinyproxy ${{ needs.prepare.outputs.version }} 多平台构建
 
-            ### 下载链接
+            ### 下载地址
 
             | 平台 | 架构 | 文件 |
             |------|------|------|
@@ -160,7 +163,7 @@ jobs:
             ./tinyproxy
             ```
 
-            ### 配置
+            ### 配置文件
 
             配置文件位于 `etc/tinyproxy/tinyproxy.conf`
           draft: false

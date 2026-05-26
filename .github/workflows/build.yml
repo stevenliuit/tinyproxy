@@ -94,14 +94,24 @@ jobs:
         if: matrix.platform != 'windows'
         run: |
           make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) install DESTDIR=$(pwd)/tinyproxy-install
-          tar -czf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C tinyproxy-install .
+          mkdir -p tinyproxy-bin
+          cp -v tinyproxy-install/usr/local/bin/tinyproxy tinyproxy-bin/ 2>/dev/null || \
+          cp -v tinyproxy-install/usr/bin/tinyproxy tinyproxy-bin/ 2>/dev/null || \
+          find tinyproxy-install -name tinyproxy -type f -executable -exec cp {} tinyproxy-bin/ \; 2>/dev/null
+          cp -rv tinyproxy-install/usr/local/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || \
+          cp -rv tinyproxy-install/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true
+          tar -czvf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C tinyproxy-bin .
 
       - name: 编译并打包 (Windows)
         if: matrix.platform == 'windows'
-        shell: bash
+        shell: cmd
         run: |
-          make install DESTDIR=/c/tinyproxy-install
-          cd /c/tinyproxy-install && zip -r ../tinyproxy-windows-x86_64.zip .
+          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+          bash -c "make install DESTDIR=/c/tinyproxy-install"
+          mkdir tinyproxy-bin
+          bash -c "cp -v /c/tinyproxy-install/bin/tinyproxy.exe tinyproxy-bin/ 2>/dev/null || cp -v /c/tinyproxy-install/tinyproxy/bin/tinyproxy.exe tinyproxy-bin/ 2>/dev/null || find /c/tinyproxy-install -name tinyproxy.exe -exec cp {} tinyproxy-bin/ \;"
+          bash -c "cp -r /c/tinyproxy-install/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || cp -r /c/tinyproxy-install/tinyproxy/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true"
+          powershell -Command "Compress-Archive -Path 'tinyproxy-bin' -DestinationPath 'tinyproxy-windows-x86_64.zip'"
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4

@@ -69,58 +69,45 @@ jobs:
 
       - name: 安装依赖 (Windows)
         if: matrix.platform == 'windows'
-        shell: bash
+        shell: powershell
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
-          choco install -y make mingw || echo "choco install attempted"
-          which autoconf || echo "autoconf check"
-
-      - name: 生成构建脚本
-        run: |
-          chmod +x autogen.sh
-          ./autogen.sh
-        shell: bash
-        if: matrix.platform != 'windows'
+          choco install -y make visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK --passive"
+          choco install -y msys2 --params "/InstallDir:C:\msys64"
+          if (Test-Path "C:\msys64\usr\bin\bash.exe") {
+            Write-Host "MSYS2 bash found"
+          }
 
       - name: 生成构建脚本 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
+        variables:
+          MSYS: winsymlinks
+          MSYS_ROOT: C:\msys64
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
+          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:/c/Program Files/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.36.32532/bin/HostX64/x64:$PATH"
+          export PKG_CONFIG_PATH="/c/msys64/usr/lib/pkgconfig:/c/mingw64/lib/pkgconfig"
           chmod +x autogen.sh
           bash autogen.sh
-
-      - name: 配置
-        run: |
-          ./configure --prefix=/usr/local
-        shell: bash
-        if: matrix.platform != 'windows'
 
       - name: 配置 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
+        variables:
+          MSYS: winsymlinks
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
+          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:/c/Program Files/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.36.32532/bin/HostX64/x64:$PATH"
           export PKG_CONFIG_PATH="/c/msys64/usr/lib/pkgconfig:/c/mingw64/lib/pkgconfig"
           ./configure --prefix=/c/tinyproxy
-
-      - name: 编译并打包 (Linux/macOS)
-        if: matrix.platform != 'windows'
-        run: |
-          make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) install DESTDIR=$(pwd)/tinyproxy-install
-          tar -czf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C tinyproxy-install .
-          ls -la tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
 
       - name: 编译并打包 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
+        variables:
+          MSYS: winsymlinks
         run: |
-          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
+          export PATH="/c/msys64/usr/bin:/c/mingw64/bin:/c/Program Files/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.36.32532/bin/HostX64/x64:$PATH"
           make install DESTDIR="C:/tinyproxy-install"
-          if [ -d /c/tinyproxy ]; then
-            cd /c/tinyproxy && zip -r /c/tinyproxy-install/tinyproxy-windows-${{ matrix.arch }}.zip . && cd /
-          fi
-          cd tinyproxy-install 2>/dev/null && zip -r ../tinyproxy-windows-${{ matrix.arch }}.zip . 2>/dev/null || ls -la
+          cd tinyproxy-install && zip -r ../tinyproxy-windows-x86_64.zip .
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4

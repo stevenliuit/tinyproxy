@@ -42,6 +42,18 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          repository: tinyproxy/tinyproxy
+          fetch-depth: 1
+
+      - name: 查看源码目录
+        run: |
+          pwd
+          ls -la
+          echo "=== github.workspace: ${{ github.workspace }} ==="
+          if [ -f autogen.sh ]; then echo "autogen.sh exists"; fi
+          if [ -f configure.ac ]; then echo "configure.ac exists"; fi
+          if [ -f configure ]; then echo "configure exists"; fi
 
       - name: 安装依赖 (Linux)
         if: matrix.platform == 'linux'
@@ -73,31 +85,22 @@ jobs:
       - name: 生成构建脚本 (Linux/macOS)
         if: matrix.platform != 'windows'
         run: |
-          if [ -f autogen.sh ]; then
-            chmod +x autogen.sh
-            ./autogen.sh
-          elif [ -f configure.ac ]; then
-            autoreconf -i
-          fi
+          chmod +x autogen.sh
+          ./autogen.sh
 
       - name: 生成构建脚本 (Windows)
         if: matrix.platform == 'windows'
         shell: bash
         run: |
           export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
-          cd /c/tinyproxy-build 2>/dev/null || true
-          if [ -f autogen.sh ]; then
-            chmod +x autogen.sh
-            bash autogen.sh
-          elif [ -f configure.ac ]; then
-            autoreconf -i
-          fi
+          chmod +x autogen.sh
+          bash autogen.sh
 
       - name: 配置 (Linux/macOS)
         if: matrix.platform != 'windows'
         run: |
-          if [ -f configure.ac ]; then
-            autoreconf -i
+          if [ ! -f configure ]; then
+            chmod +x autogen.sh && ./autogen.sh
           fi
           ./configure --prefix=/usr
 
@@ -107,8 +110,8 @@ jobs:
         run: |
           export PATH="/c/msys64/usr/bin:/c/mingw64/bin:$PATH"
           export PKG_CONFIG_PATH="/c/msys64/usr/lib/pkgconfig:/c/mingw64/lib/pkgconfig"
-          if [ -f configure.ac ]; then
-            autoreconf -i
+          if [ ! -f configure ]; then
+            chmod +x autogen.sh && bash autogen.sh
           fi
           ./configure --prefix=/c/tinyproxy
 

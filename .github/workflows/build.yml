@@ -78,14 +78,12 @@ jobs:
           chmod +x autogen.sh
           ./autogen.sh
 
-      - name: 配置
-        shell: cmd
+      - name: 配置 (Windows)
         if: matrix.platform == 'windows'
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
-          bash -c "./configure --prefix=/c/tinyproxy"
+          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 && bash -c "./configure --prefix=/c/tinyproxy"
 
-      - name: 配置
+      - name: 配置 (Linux/macOS)
         if: matrix.platform != 'windows'
         run: |
           ./configure --prefix=/usr/local

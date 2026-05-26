@@ -1,0 +1,143 @@
+name: 构建 Tinyproxy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本标签'
+        required: false
+        default: '1.11.0'
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build:
+    name: 构建 (${{ matrix.platform }} ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x86_64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: arm64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: armv7l
+          - os: windows-latest
+            platform: windows
+            arch: x86_64
+          - os: macos-14
+            platform: macos
+            arch: arm64
+          - os: macos-12
+            platform: macos
+            arch: x86_64
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装依赖 (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            glib2.0-dev \
+            libev-dev
+
+      - name: 安装依赖 (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          brew install autoconf automake libtool pkg-config glib autoconf-archive
+
+      - name: 安装依赖 (Windows)
+        if: matrix.platform == 'windows'
+        shell: powershell
+        run: |
+          choco install -y make mingw
+
+      - name: 生成构建脚本 (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: |
+          chmod +x autogen.sh
+          ./autogen.sh
+
+      - name: 生成构建脚本 (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          chmod +x autogen.sh
+          ./autogen.sh
+
+      - name: 配置 (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: |
+          ./configure --prefix=/usr
+
+      - name: 配置 (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          ./configure --prefix=/c/tinyproxy
+
+      - name: 编译
+        run: |
+          make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
+      - name: 安装并测试
+        if: matrix.platform != 'windows'
+        run: |
+          sudo make install
+          tinyproxy --version
+          which tinyproxy
+
+      - name: 安装并测试 (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          make install
+          ./src/tinyproxy.exe --version
+
+      - name: 打包 (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          tar -czf tinyproxy-${{ matrix.arch }}-linux.tar.gz \
+            --transform 's/^/tinyproxy-${{ matrix.version || env.GITHUB_REF_NAME }}/' \
+            usr/bin/tinyproxy usr/share/tinyproxy 2>/dev/null || \
+          tar -czf tinyproxy-${{ matrix.arch }}-linux.tar.gz -C / .
+
+      - name: 打包 (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir -p tinyproxy-bin
+          cp -r /usr/local/bin/tinyproxy tinyproxy-bin/
+          tar -czf tinyproxy-${{ matrix.arch }}-macos.tar.gz tinyproxy-bin/
+
+      - name: 打包 (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          mkdir -p tinyproxy-bin
+          cp -r /c/tinyproxy/bin/tinyproxy.exe tinyproxy-bin/ 2>/dev/null || cp -r ./src/tinyproxy.exe tinyproxy-bin/ 2>/dev/null || true
+          cp -r /c/tinyproxy/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true
+          cd tinyproxy-bin && zip -r ../tinyproxy-${{ matrix.arch }}-windows.zip . && cd ..
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+            tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}.zip
+          retention-days: 7

@@ -44,16 +44,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: tinyproxy/tinyproxy
+          ref: master
           fetch-depth: 1
-
-      - name: 查看源码目录
-        run: |
-          pwd
-          ls -la
-          echo "=== github.workspace: ${{ github.workspace }} ==="
-          if [ -f autogen.sh ]; then echo "autogen.sh exists"; fi
-          if [ -f configure.ac ]; then echo "configure.ac exists"; fi
-          if [ -f configure ]; then echo "configure exists"; fi
 
       - name: 安装依赖 (Linux)
         if: matrix.platform == 'linux'
@@ -102,7 +94,7 @@ jobs:
           if [ ! -f configure ]; then
             chmod +x autogen.sh && ./autogen.sh
           fi
-          ./configure --prefix=/usr
+          ./configure --prefix=/usr/local
 
       - name: 配置 (Windows)
         if: matrix.platform == 'windows'
@@ -122,8 +114,8 @@ jobs:
       - name: 安装并测试
         if: matrix.platform != 'windows'
         run: |
-          sudo make install
-          tinyproxy --version || echo "tinyproxy installed"
+          make install
+          ./src/tinyproxy --version 2>/dev/null || echo "tinyproxy built"
 
       - name: 安装并测试 (Windows)
         if: matrix.platform == 'windows'
@@ -134,16 +126,16 @@ jobs:
           if [ -f ./src/tinyproxy.exe ]; then
             ./src/tinyproxy.exe --version 2>/dev/null || echo "tinyproxy built"
           elif [ -f /c/tinyproxy/bin/tinyproxy.exe ]; then
-            /c/tinyproxy/bin/tinyproxy.exe --version 2>/dev/null || echo "tinyproxy installed"
+            /c/tinyproxy/bin/tinyproxy.exe --version 2>/dev/null || echo "tinyproxy built"
           fi
 
       - name: 打包 (Linux)
         if: matrix.platform == 'linux'
         run: |
-          mkdir -p tinyproxy-install
+          mkdir -p tinyproxy-install/usr/local
           make DESTDIR=$(pwd)/tinyproxy-install install
           tar -czf tinyproxy-${{ matrix.arch }}-linux.tar.gz -C tinyproxy-install .
-          rm -rf tinyproxy-install
+          ls -la tinyproxy-${{ matrix.arch }}-linux.tar.gz
 
       - name: 打包 (macOS)
         if: matrix.platform == 'macos'
@@ -151,7 +143,7 @@ jobs:
           mkdir -p tinyproxy-install/usr/local
           make DESTDIR=$(pwd)/tinyproxy-install install
           tar -czf tinyproxy-${{ matrix.arch }}-macos.tar.gz -C tinyproxy-install .
-          rm -rf tinyproxy-install
+          ls -la tinyproxy-${{ matrix.arch }}-macos.tar.gz
 
       - name: 打包 (Windows)
         if: matrix.platform == 'windows'

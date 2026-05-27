@@ -16,7 +16,6 @@
 | Linux | ARM64 | .tar.gz |
 | Linux | ARMv7l | .tar.gz |
 | macOS | ARM64 (Apple Silicon) | .tar.gz |
-| macOS | x86_64 | .tar.gz |
 
 ## 下载构建产物
 
@@ -76,37 +75,41 @@ ps aux | grep tinyproxy
 kill <PID>
 ```
 
-### Windows
+## systemd 服务 (Linux)
 
-#### 1. 解压
+创建服务文件 `/etc/systemd/system/tinyproxy.service`:
 
-使用 PowerShell 或文件管理器解压 `tinyproxy-windows-x86_64-*.zip`
+```ini
+[Unit]
+Description=Tinyproxy HTTP Proxy Server
+After=network.target
 
-#### 2. 配置
+[Service]
+Type=forking
+ExecStart=/path/to/tinyproxy-bin/tinyproxy -d -c /path/to/tinyproxy-bin/etc/tinyproxy/tinyproxy.conf
+PIDFile=/var/run/tinyproxy.pid
 
-编辑 `etc\tinyproxy\tinyproxy.conf` 配置文件（路径使用反斜杠或正斜杠均可）
-
-#### 3. 启动
-
-```powershell
-# 进入目录
-cd tinyproxy-bin
-
-# 前台运行
-.\tinyproxy.exe -d -c etc/tinyproxy/tinyproxy.conf
-
-# 后台运行 (PowerShell)
-Start-Process -FilePath .\tinyproxy.exe -ArgumentList "-d","-c","etc/tinyproxy/tinyproxy.conf"
+[Install]
+WantedBy=multi-user.target
 ```
 
-#### 4. 停止
+管理服务:
 
-```powershell
-# 查找进程
-Get-Process tinyproxy
+```bash
+# 重新加载systemd配置
+sudo systemctl daemon-reload
 
-# 杀掉进程
-Stop-Process -Name tinyproxy
+# 启动服务
+sudo systemctl start tinyproxy
+
+# 开机自启
+sudo systemctl enable tinyproxy
+
+# 查看状态
+sudo systemctl status tinyproxy
+
+# 停止服务
+sudo systemctl stop tinyproxy
 ```
 
 ## 常用配置选项

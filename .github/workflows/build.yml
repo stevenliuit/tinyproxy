@@ -70,18 +70,31 @@ jobs:
       - name: 安装依赖 (Linux)
         if: matrix.platform == 'linux'
         run: |
-          docker pull quay.io/pypa/manylinux1_x86_64:latest
-          docker run --rm \
-            -v $PWD:/src \
-            -w /src \
-            quay.io/pypa/manylinux1_x86_64:latest \
-            bash -c '
-              yum install -y autoconf automake libtool pkgconfig glib2-devel help2man
-              chmod +x autogen.sh
-              ./autogen.sh
-              LDFLAGS="-lrt" ./configure --prefix=/usr/local
-              make -j4 install DESTDIR=$(pwd)/tinyproxy-install
-            '
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            libglib2.0-dev \
+            help2man
+
+      - name: 生成构建脚本 (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          chmod +x autogen.sh
+          ./autogen.sh
+
+      - name: 配置 (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          LDFLAGS="-Wl,-rpath,/usr/local/lib" ./configure --prefix=/usr/local --enable-static --disable-shared
+
+      - name: 编译 (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          make -j$(nproc) install DESTDIR=$(pwd)/tinyproxy-install
 
       - name: 打包 (Linux)
         if: matrix.platform == 'linux'
@@ -92,7 +105,7 @@ jobs:
           find tinyproxy-install -name tinyproxy -type f -executable -exec cp {} tinyproxy-bin/ \; 2>/dev/null
           cp -rv tinyproxy-install/usr/local/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || \
           cp -rv tinyproxy-install/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true
-          ls -la tinyproxy-bin/
+          ldd tinyproxy-bin/tinyproxy 2>/dev/null || true
           tar -czvf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}.tar.gz -C tinyproxy-bin .
 
       - name: 安装依赖 (macOS)

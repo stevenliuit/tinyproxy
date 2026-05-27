@@ -76,11 +76,11 @@ jobs:
             -w /src \
             quay.io/pypa/manylinux1_x86_64:latest \
             bash -c '
-              yum install -y autoconf automake libtool pkgconfig glib2-devel libev-devel autoconf-archive help2man
+              yum install -y autoconf automake libtool pkgconfig glib2-devel help2man
               chmod +x autogen.sh
               ./autogen.sh
-              ./configure --prefix=/usr/local
-              make -j$(nproc) install DESTDIR=$(pwd)/tinyproxy-install
+              LDFLAGS="-lrt" ./configure --prefix=/usr/local
+              make -j4 install DESTDIR=$(pwd)/tinyproxy-install
             '
 
       - name: 打包 (Linux)

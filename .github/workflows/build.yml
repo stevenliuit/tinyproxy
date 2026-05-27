@@ -70,12 +70,12 @@ jobs:
       - name: 安装依赖 (Linux)
         if: matrix.platform == 'linux'
         run: |
-          docker run --rm --privileged -v $PWD:/src quay.io/pypa/manylinux2014_x86_64 /bin/bash -c "
+          docker run --rm --privileged -v $PWD:/src quay.io/pypa/manylinux1_x86_64 /bin/bash -c "
             cd /src
-            yum install -y autoconf automake libtool pkg-config glib2-devel libev-devel autoconf-archive help2man
+            yum install -y autoconf automake libtool pkgconfig glib2-devel libev-devel autoconf-archive help2man
             chmod +x autogen.sh
             ./autogen.sh
-            ./configure --prefix=/usr/local
+            ./configure --prefix=/usr/local --enable-static --disable-shared
             make -j\$(nproc) install DESTDIR=\$(pwd)/tinyproxy-install
             mkdir -p tinyproxy-bin
             cp -v tinyproxy-install/usr/local/bin/tinyproxy tinyproxy-bin/ 2>/dev/null || \

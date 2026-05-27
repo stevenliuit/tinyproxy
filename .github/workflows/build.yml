@@ -70,21 +70,30 @@ jobs:
       - name: 安装依赖 (Linux)
         if: matrix.platform == 'linux'
         run: |
-          docker run --rm --privileged -v $PWD:/src quay.io/pypa/manylinux1_x86_64 /bin/bash -c "
-            cd /src
-            yum install -y autoconf automake libtool pkgconfig glib2-devel libev-devel autoconf-archive help2man
-            chmod +x autogen.sh
-            ./autogen.sh
-            ./configure --prefix=/usr/local --enable-static --disable-shared
-            make -j\$(nproc) install DESTDIR=\$(pwd)/tinyproxy-install
-            mkdir -p tinyproxy-bin
-            cp -v tinyproxy-install/usr/local/bin/tinyproxy tinyproxy-bin/ 2>/dev/null || \
-            cp -v tinyproxy-install/usr/bin/tinyproxy tinyproxy-bin/ 2>/dev/null || \
-            find tinyproxy-install -name tinyproxy -type f -executable -exec cp {} tinyproxy-bin/ \; 2>/dev/null
-            cp -rv tinyproxy-install/usr/local/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || \
-            cp -rv tinyproxy-install/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true
-            tar -czvf tinyproxy-\${{ matrix.platform }}-\${{ matrix.arch }}-\${{ needs.prepare.outputs.version }}.tar.gz -C tinyproxy-bin .
-          "
+          docker pull quay.io/pypa/manylinux1_x86_64:latest
+          docker run --rm \
+            -v $PWD:/src \
+            -w /src \
+            quay.io/pypa/manylinux1_x86_64:latest \
+            bash -c '
+              yum install -y autoconf automake libtool pkgconfig glib2-devel libev-devel autoconf-archive help2man
+              chmod +x autogen.sh
+              ./autogen.sh
+              ./configure --prefix=/usr/local
+              make -j$(nproc) install DESTDIR=$(pwd)/tinyproxy-install
+            '
+
+      - name: 打包 (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p tinyproxy-bin
+          cp -v tinyproxy-install/usr/local/bin/tinyproxy tinyproxy-bin/ 2>/dev/null || \
+          cp -v tinyproxy-install/usr/bin/tinyproxy tinyproxy-bin/ 2>/dev/null || \
+          find tinyproxy-install -name tinyproxy -type f -executable -exec cp {} tinyproxy-bin/ \; 2>/dev/null
+          cp -rv tinyproxy-install/usr/local/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || \
+          cp -rv tinyproxy-install/etc/tinyproxy tinyproxy-bin/ 2>/dev/null || true
+          ls -la tinyproxy-bin/
+          tar -czvf tinyproxy-${{ matrix.platform }}-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}.tar.gz -C tinyproxy-bin .
 
       - name: 安装依赖 (macOS)
         if: matrix.platform == 'macos'

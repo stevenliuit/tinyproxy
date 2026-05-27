@@ -58,9 +58,6 @@ jobs:
           - os: macos-14
             platform: macos
             arch: arm64
-          - os: macos-12
-            platform: macos
-            arch: x86_64
 
     steps:
       - name: 检出代码
@@ -144,7 +141,6 @@ jobs:
             | Linux | ARM64 | tinyproxy-linux-arm64-${{ needs.prepare.outputs.version }}.tar.gz |
             | Linux | ARMv7l | tinyproxy-linux-armv7l-${{ needs.prepare.outputs.version }}.tar.gz |
             | macOS | ARM64 | tinyproxy-macos-arm64-${{ needs.prepare.outputs.version }}.tar.gz |
-            | macOS | x86_64 | tinyproxy-macos-x86_64-${{ needs.prepare.outputs.version }}.tar.gz |
 
             ### 使用说明
 
